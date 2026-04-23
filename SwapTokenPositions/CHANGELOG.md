@@ -2,6 +2,33 @@
 
 All notable changes to the **SwapTokenPositions** script will be documented in this file.
 
+## [2.0.0] - 2026-04-23
+
+### Added
+
+- New staged FX pipeline with explicit origin, travel, and destination phases.
+- New FX flags: `--origin-fx`, `--travel-fx`, `--destination-fx`.
+- New timing flags: `--origin-time`, `--travel-time`, `--destination-time`, `--swap-delay`, `--destination-delay`.
+- Preset system with `portal`, `lightning`, `shadow`, `fire`, `magic`, and `none`.
+- `--instant` flag to force immediate swap.
+- `--check-settings` validation command for persistent defaults.
+- Backward-compatibility parsing for legacy flags with deprecation warnings.
+- Modular multi-file source structure under `src/`.
+- Local build tooling (`rollup`) to generate single-file artifacts for Roll20.
+- Build banner metadata in generated output, including build timestamp.
+
+### Changed
+
+- Refactored internal architecture from a monolithic file to source modules with a generated bundle.
+- Updated root `SwapTokenPositions.js` and versioned `2.0.0/SwapTokenPositions.js` to generated artifacts.
+- Updated script metadata and developer documentation to reflect version 2 command model.
+
+### Deprecated
+
+- `--duration` (replaced by `--swap-delay`)
+- `--beam-fx` (replaced by `--travel-fx`)
+- `--burst-fx` (replaced by `--destination-fx`)
+
 ## [1.0.0] - 2026-04-21
 
 ### Added
