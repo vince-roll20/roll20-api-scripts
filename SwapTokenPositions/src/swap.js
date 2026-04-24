@@ -122,6 +122,103 @@ function scheduleDestinationFx(pos1, pos2, destinationFx, delayMs) {
 }
 
 /**
+ * Keeps travel FX visible for the configured travel duration.
+ *
+ * Roll20's spawnFxBetweenPoints API does not expose a duration argument for
+ * built-in beam FX, so persistence is achieved by re-spawning bursts across
+ * the travel window.
+ *
+ * @param {{left:number, top:number, page:string}} pos1 Start position.
+ * @param {{left:number, top:number, page:string}} pos2 End position.
+ * @param {string} travelFx Travel FX type.
+ * @param {number} durationMs Duration in milliseconds.
+ * @param {Function} onComplete Callback when the FX window completes.
+ * @returns {void}
+ */
+function sustainTravelFx(pos1, pos2, travelFx, durationMs, onComplete) {
+  if (travelFx === "none") {
+    onComplete();
+    return;
+  }
+
+  if (durationMs <= 0) {
+    spawnTravelFx(pos1, pos2, travelFx);
+    onComplete();
+    return;
+  }
+
+  const pulseMs = 350;
+  const startedAt = Date.now();
+
+  const pulse = () => {
+    spawnTravelFx(pos1, pos2, travelFx);
+    if (Date.now() - startedAt >= durationMs) {
+      onComplete();
+      return;
+    }
+    setTimeout(pulse, pulseMs);
+  };
+
+  pulse();
+}
+
+/**
+ * Animates both tokens toward their destination over the configured travel duration.
+ *
+ * @param {object} token1 First token object.
+ * @param {object} token2 Second token object.
+ * @param {{left:number, top:number}} pos1 Original position for token1.
+ * @param {{left:number, top:number}} pos2 Original position for token2.
+ * @param {number} durationMs Travel animation duration in milliseconds.
+ * @param {object} msg Roll20 chat message object.
+ * @param {Function} onComplete Callback after animation reaches the destination.
+ * @returns {void}
+ */
+function animateTravel(token1, token2, pos1, pos2, durationMs, msg, onComplete) {
+  if (durationMs <= 0) {
+    onComplete();
+    return;
+  }
+
+  const token1Id = token1.get("_id");
+  const token2Id = token2.get("_id");
+  // Roll20 can coalesce very frequent token updates. Use paced, fixed steps so
+  // travel visibly spans the configured duration.
+  const maxTickMs = 120;
+  const stepCount = Math.max(1, Math.ceil(durationMs / maxTickMs));
+  const stepIntervalMs = durationMs / stepCount;
+  let stepIndex = 0;
+
+  const step = () => {
+    stepIndex += 1;
+    const progress = Math.min(stepIndex / stepCount, 1);
+
+    const nextToken1Left = pos1.left + (pos2.left - pos1.left) * progress;
+    const nextToken1Top = pos1.top + (pos2.top - pos1.top) * progress;
+    const nextToken2Left = pos2.left + (pos1.left - pos2.left) * progress;
+    const nextToken2Top = pos2.top + (pos1.top - pos2.top) * progress;
+
+    if (
+      !withLiveTokens({ token1Id, token2Id, msg }, ({ token1: liveToken1, token2: liveToken2 }) => {
+        liveToken1.set({ left: nextToken1Left, top: nextToken1Top });
+        liveToken2.set({ left: nextToken2Left, top: nextToken2Top });
+      })
+    ) {
+      return;
+    }
+
+    if (progress >= 1) {
+      onComplete();
+      return;
+    }
+
+    setTimeout(step, stepIntervalMs);
+  };
+
+  setTimeout(step, stepIntervalMs);
+}
+
+/**
  * Swaps token coordinates, verifies the result, and runs a completion callback.
  *
  * @param {object} token1 First token object.
@@ -208,17 +305,32 @@ function runNormalTravelPhase(context) {
     travelFx,
     destinationFx,
     msg,
-    msBeforeSwap,
+    msTravelTime,
+    msSwapDelay,
     msBeforeDestinationFx,
   } = context;
 
-  spawnTravelFx(pos1, pos2, travelFx);
-
-  setTimeout(() => {
+  const runSwap = () => {
     performSwap(token1, token2, pos1, pos2, msg, () => {
       scheduleDestinationFx(pos1, pos2, destinationFx, msBeforeDestinationFx);
     });
-  }, msBeforeSwap);
+  };
+
+  let completedTracks = 0;
+  const finishTravelPhase = () => {
+    completedTracks += 1;
+    if (completedTracks < 2) {
+      return;
+    }
+    if (msSwapDelay > 0) {
+      setTimeout(runSwap, msSwapDelay);
+    } else {
+      runSwap();
+    }
+  };
+
+  animateTravel(token1, token2, pos1, pos2, msTravelTime, msg, finishTravelPhase);
+  sustainTravelFx(pos1, pos2, travelFx, msTravelTime, finishTravelPhase);
 }
 
 function runInvisibleTravelPhase(context) {
@@ -230,7 +342,8 @@ function runInvisibleTravelPhase(context) {
     travelFx,
     destinationFx,
     msg,
-    msBeforeSwap,
+    msTravelTime,
+    msSwapDelay,
     msBeforeDestinationFx,
   } = context;
   const hideRenderBufferMs = 80;
@@ -284,14 +397,15 @@ function runInvisibleTravelPhase(context) {
   }
 
   setTimeout(() => {
-    spawnTravelFx(pos1, pos2, travelFx);
+    sustainTravelFx(pos1, pos2, travelFx, msTravelTime, () => {});
 
-    if (msBeforeSwap > 0) {
-      setTimeout(doMove, msBeforeSwap);
-    } else {
-      doMove();
+    const msBeforeHiddenSwap = msTravelTime + msSwapDelay;
+    if (msBeforeHiddenSwap > 0) {
+      setTimeout(doMove, msBeforeHiddenSwap);
+      return;
     }
-  }, hideRenderBufferMs);
+    doMove();
+  });
 }
 
 /**
@@ -319,7 +433,8 @@ export function executeSwapPipeline(config, token1, token2, pos1, pos2, msg) {
   } = config;
 
   const msBeforeTravel = originTime * 1000;
-  const msBeforeSwap = (travelTime + swapDelay) * 1000;
+  const msTravelTime = travelTime * 1000;
+  const msSwapDelay = swapDelay * 1000;
   const msBeforeDestinationFx = (destinationDelay + destinationTime) * 1000;
   const useInvisibleTravel = travelMode === "invisible";
 
@@ -336,7 +451,8 @@ export function executeSwapPipeline(config, token1, token2, pos1, pos2, msg) {
         travelFx,
         destinationFx,
         msg,
-        msBeforeSwap,
+        msTravelTime,
+        msSwapDelay,
         msBeforeDestinationFx,
       });
       return;
@@ -350,7 +466,8 @@ export function executeSwapPipeline(config, token1, token2, pos1, pos2, msg) {
       travelFx,
       destinationFx,
       msg,
-      msBeforeSwap,
+      msTravelTime,
+      msSwapDelay,
       msBeforeDestinationFx,
     });
   }, msBeforeTravel);

@@ -31,7 +31,7 @@ export function showHelp(msgObj) {
     "<code>--destination-fx &lt;type&gt;</code> &mdash; FX at both new positions after swap.<br>",
     "<br><strong>Stage Timing:</strong><br>",
     `<code>--origin-time &lt;${TIME_MIN}-${TIME_MAX}&gt;</code> &mdash; Wait (s) after Origin FX before continuing.<br>`,
-    `<code>--travel-time &lt;${TIME_MIN}-${TIME_MAX}&gt;</code> &mdash; Wait (s) after Travel FX before continuing.<br>`,
+    `<code>--travel-time &lt;${TIME_MIN}-${TIME_MAX}&gt;</code> &mdash; Duration (s) of the travel animation stage.<br>`,
     `<code>--destination-time &lt;${TIME_MIN}-${TIME_MAX}&gt;</code> &mdash; Wait (s) after Destination FX (stored, no pipeline effect).<br>`,
     "<br><strong>Delays:</strong><br>",
     `<code>--swap-delay &lt;${DELAY_MIN}-${DELAY_MAX}&gt;</code> &mdash; Additional pause between Origin and Travel stages.<br>`,

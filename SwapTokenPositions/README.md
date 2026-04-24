@@ -92,7 +92,7 @@ Swaps the two currently selected tokens using the default settings.
 - `--travel-mode <value>`: Visibility behavior during travel stage.
   - Values: `normal`, `invisible`
 - `--origin-time <0-10>`: Seconds to wait after origin FX.
-- `--travel-time <0-10>`: Seconds to wait after travel FX.
+- `--travel-time <0-10>`: Duration in seconds for the travel animation stage.
 - `--destination-time <0-10>`: Stored destination timing value.
 - `--swap-delay <0-10>`: Extra delay between origin and travel stages.
 - `--destination-delay <0-10>`: Extra delay between travel stage and swap.
