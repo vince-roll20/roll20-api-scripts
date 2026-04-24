@@ -144,25 +144,37 @@ npm run build
 
 ## Deprecated Flag Warnings
 
-1. **Deprecated beam flag warning**
+1. **Deprecated mode flag warning + mapping (beams)**
+    - Action: `!swap-tokens --mode beams`
+    - Expected:
+       - Sender sees deprecation warning indicating `--mode` is deprecated and mapped to a preset.
+       - Command still functions.
+
+2. **Deprecated mode flag warning + mapping (transport)**
+    - Action: `!swap-tokens --mode transport`
+    - Expected:
+       - Sender sees deprecation warning indicating `--mode` is deprecated and mapped to a preset.
+       - Command still functions.
+
+3. **Deprecated beam flag warning**
    - Action: `!swap-tokens --beam-fx beam-fire`
    - Expected:
      - Sender sees deprecation warning: use `--travel-fx`.
      - Command still functions.
 
-2. **Deprecated burst flag warning**
+4. **Deprecated burst flag warning**
    - Action: `!swap-tokens --burst-fx burst-holy`
    - Expected:
      - Sender sees deprecation warning: use `--destination-fx`.
      - Command still functions.
 
-3. **Deprecated duration flag warning**
+5. **Deprecated duration flag warning**
    - Action: `!swap-tokens --duration 2`
    - Expected:
      - Sender sees deprecation warning: use `--swap-delay`.
      - Command still functions.
 
-4. **Deprecated invalid values**
+6. **Deprecated invalid values**
    - Action: `!swap-tokens --beam-fx not-a-real-fx --duration 99`
    - Expected:
      - Deprecation warnings still appear.

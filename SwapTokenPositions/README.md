@@ -17,61 +17,25 @@
 - **Preset Support**: Includes `portal`, `lightning`, `shadow`, `fire`, `magic`, `transport`, and `none` presets.
 - **Legacy Compatibility**: Supports deprecated `--duration`, `--beam-fx`, and `--burst-fx` flags with warnings.
 
-## Development
+## Contributor Docs
 
-This mod now uses a multi-file source layout for maintenance, but Roll20 still requires a single bundled script for manual testing and publication.
+This README focuses on Roll20 command usage. For contributor-oriented details, use these docs:
 
-### Source of Truth
+- [DEVELOPERS.md](DEVELOPERS.md) for setup, build, watch mode, troubleshooting, and contributor workflow.
+- [TESTING.md](TESTING.md) for the manual Roll20 validation checklist.
 
-As the script was nearly 1.2k lines in a single file, the source code has been refactored into multiple modules under the `src/` directory. This allows for better organization and maintainability.
+## v1 to v2 Migration Notes
 
-- Edit files in `src/`.
-- Do not hand-edit generated bundles; they are build artifacts.
+The v2 series keeps the same core command (`!swap-tokens`) but changes how animation is configured.
 
-### Build Setup
-
-From the `SwapTokenPositions` folder:
-
-```bash
-npm install
-npm run build
-```
-
-The build writes the same bundled script to both of these files:
-
-- `SwapTokenPositions.js`
-- `<version>/SwapTokenPositions.js` where `<version>` comes from `script.json`.
-
-### Watch Mode
-
-For active development:
-
-```bash
-npm run watch
-```
-
-This rebuilds the bundle whenever a source file changes.
-
-Roll20 does not load files from `src/` directly. Only the generated single-file bundle should be pasted into the Roll20 mod area.
-
-### Contributor Workflow
-
-When making changes to this mod:
-
-1. Edit the source files under `src/`.
-2. Update script metadata in `script.json` if necessary (e.g., version, description).
-3. Update documentation in `README.md` and `TESTING.md` as needed to reflect new features or changes.
-4. Run `npm run build`.
-5. Verify the generated `SwapTokenPositions.js` bundle works in Roll20.
-6. Commit the source changes and the regenerated build artifacts together.
-
-### Manual Roll20 Testing
-
-1. Run `npm run build`.
-2. Open `SwapTokenPositions.js`.
-3. Copy the entire generated file.
-4. Paste it into the Roll20 Mod Scripts editor for your game.
-5. Complete the detailed test plan: [TESTING.md](TESTING.md)
+- `--mode` (`beams|transport`) is still accepted as a deprecated legacy flag and maps to presets:
+  - `--mode beams` -> `--preset lightning`
+  - `--mode transport` -> `--preset transport`
+- New commands should use `--preset` and staged flags directly.
+- `--beam-fx` still works as a deprecated alias for `--travel-fx`.
+- `--burst-fx` still works as a deprecated alias for `--destination-fx`.
+- `--duration` still works as a deprecated alias for `--swap-delay`.
+- v2 explicitly rejects cross-page token pairs.
 
 ## Roll20 VTT Commands
 
@@ -93,9 +57,9 @@ Swaps the two currently selected tokens using the default settings.
   - Values: `normal`, `invisible`
 - `--origin-time <0-10>`: Seconds to wait after origin FX.
 - `--travel-time <0-10>`: Duration in seconds for the travel animation stage.
-- `--destination-time <0-10>`: Stored destination timing value.
+- `--destination-time <0-10>`: Additional wait before destination FX is shown.
 - `--swap-delay <0-10>`: Extra delay between origin and travel stages.
-- `--destination-delay <0-10>`: Extra delay between travel stage and swap.
+- `--destination-delay <0-10>`: Extra delay before destination FX is shown.
 
 ### Examples of Customization
 
@@ -120,6 +84,7 @@ Swaps the two currently selected tokens using the default settings.
 
 The following flags are still supported for backward compatibility but are deprecated:
 
+- `--mode` (use `--preset`; `beams` maps to `lightning`, `transport` maps to `transport`)
 - `--duration` (use `--swap-delay`)
 - `--beam-fx` (use `--travel-fx`)
 - `--burst-fx` (use `--destination-fx`)
