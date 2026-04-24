@@ -227,7 +227,25 @@ Run these as GM unless otherwise specified.
 2. Restart sandbox and rerun `--show-settings`.
    - Expected: Saved settings persist across restart.
 
-3. Verify command still works after reset and save cycles.
+3. **Delete token during delayed pipeline**
+   - Action:
+     - Start a delayed swap (for example `!swap-tokens --preset portal` or `!swap-tokens --travel-time 3`).
+     - Before swap completion, delete one selected token.
+   - Expected:
+     - Script does not crash.
+     - Sender receives `Swap Cancelled` (or equivalent missing-token error) instead of silent failure.
+     - Later swaps with valid tokens still work.
+
+4. **Archive/switch page during delayed pipeline**
+   - Action:
+     - Start a delayed swap with timing (`--travel-time`, `--swap-delay`, or preset with delay).
+     - Before completion, move to another page as GM and/or archive/remove the active page token context.
+   - Expected:
+     - Script remains stable with no sandbox errors.
+     - If tokens become unavailable, swap is cancelled gracefully with feedback.
+     - If tokens remain valid, swap completes normally.
+
+5. Verify command still works after reset and save cycles.
    - Expected: Behavior remains consistent.
 
 ## Exit Criteria

@@ -62,6 +62,43 @@ function hasVerifiedSwapPosition(token1, token2, pos1, pos2) {
 }
 
 /**
+ * Resolves the current live token objects from stored ids.
+ *
+ * @param {string} token1Id First token id.
+ * @param {string} token2Id Second token id.
+ * @returns {{token1:object, token2:object}|null} Live tokens or null when missing.
+ */
+function getLiveTokenPair(token1Id, token2Id) {
+  const token1 = getObj("graphic", token1Id);
+  const token2 = getObj("graphic", token2Id);
+  if (!token1 || !token2) {
+    return null;
+  }
+  return { token1, token2 };
+}
+
+/**
+ * Resolves live tokens and handles missing-token failures consistently.
+ *
+ * @param {{token1Id:string, token2Id:string, msg:object}} context Token ids and message context.
+ * @param {(tokens:{token1:object, token2:object})=>void} callback Work to execute when tokens are live.
+ * @returns {boolean} True when callback ran; false when tokens were missing.
+ */
+function withLiveTokens(context, callback) {
+  const livePair = getLiveTokenPair(context.token1Id, context.token2Id);
+  if (!livePair) {
+    whisperSenderError(
+      context.msg,
+      "Swap cancelled because one or both tokens are no longer available.",
+      "Swap Cancelled",
+    );
+    return false;
+  }
+  callback(livePair);
+  return true;
+}
+
+/**
  * Spawns destination FX at both destination points after an optional delay.
  *
  * @param {{left:number, top:number, page:string}} pos1 Original position for token1.
@@ -105,17 +142,37 @@ export function performSwap(
   onVerified,
   onFailed,
 ) {
-  token1.set({ left: pos2.left, top: pos2.top });
-  token2.set({ left: pos1.left, top: pos1.top });
+  const token1Id = token1.get("_id");
+  const token2Id = token2.get("_id");
+
+  if (!withLiveTokens({ token1Id, token2Id, msg }, ({ token1: liveToken1, token2: liveToken2 }) => {
+    liveToken1.set({ left: pos2.left, top: pos2.top });
+    liveToken2.set({ left: pos1.left, top: pos1.top });
+  })) {
+    return;
+  }
 
   const maxVerificationAttempts = 8;
   const verificationRetryMs = 50;
   let attempt = 0;
 
   const verifyThenFinalize = () => {
-    if (hasVerifiedSwapPosition(token1, token2, pos1, pos2)) {
-      const token1Name = getSafeTokenName(token1, "Token 1");
-      const token2Name = getSafeTokenName(token2, "Token 2");
+    const livePair = getLiveTokenPair(token1Id, token2Id);
+    if (!livePair) {
+      whisperSenderError(
+        msg,
+        "Swap cancelled because one or both tokens are no longer available.",
+        "Swap Cancelled",
+      );
+      if (typeof onFailed === "function") {
+        onFailed();
+      }
+      return;
+    }
+
+    if (hasVerifiedSwapPosition(livePair.token1, livePair.token2, pos1, pos2)) {
+      const token1Name = getSafeTokenName(livePair.token1, "Token 1");
+      const token2Name = getSafeTokenName(livePair.token2, "Token 2");
       whisperSender(
         msg,
         `<strong>Swap Successful!</strong><br>${token1Name} ↔ ${token2Name}`,
@@ -178,41 +235,53 @@ function runInvisibleTravelPhase(context) {
   } = context;
   const hideRenderBufferMs = 80;
   const revealRenderBufferMs = 120;
+  const token1Id = token1.get("_id");
+  const token2Id = token2.get("_id");
 
   const layer1 = token1.get("layer");
   const layer2 = token2.get("layer");
 
   const revealThenFx = () => {
-    // Restore layer — tokens appear at their new positions with no render artifact.
-    token1.set({ layer: layer1 });
-    token2.set({ layer: layer2 });
-    setTimeout(() => scheduleDestinationFx(pos1, pos2, destinationFx, 0), revealRenderBufferMs);
+    withLiveTokens({ token1Id, token2Id, msg }, ({ token1: liveToken1, token2: liveToken2 }) => {
+      // Restore layer — tokens appear at their new positions with no render artifact.
+      liveToken1.set({ layer: layer1 });
+      liveToken2.set({ layer: layer2 });
+      setTimeout(() => scheduleDestinationFx(pos1, pos2, destinationFx, 0), revealRenderBufferMs);
+    });
   };
 
   const doMove = () => {
-    // Tokens are on the GM layer so the position change is invisible to players.
-    token1.set({ left: pos2.left, top: pos2.top });
-    token2.set({ left: pos1.left, top: pos1.top });
+    withLiveTokens({ token1Id, token2Id, msg }, ({ token1: liveToken1, token2: liveToken2 }) => {
+      // Tokens are on the GM layer so the position change is invisible to players.
+      liveToken1.set({ left: pos2.left, top: pos2.top });
+      liveToken2.set({ left: pos1.left, top: pos1.top });
 
-    const token1Name = getSafeTokenName(token1, "Token 1");
-    const token2Name = getSafeTokenName(token2, "Token 2");
-    whisperSender(
-      msg,
-      `<strong>Swap Successful!</strong><br>${token1Name} ↔ ${token2Name}`,
-      "Success",
-    );
+      const token1Name = getSafeTokenName(liveToken1, "Token 1");
+      const token2Name = getSafeTokenName(liveToken2, "Token 2");
+      whisperSender(
+        msg,
+        `<strong>Swap Successful!</strong><br>${token1Name} ↔ ${token2Name}`,
+        "Success",
+      );
 
-    if (msBeforeDestinationFx > 0) {
-      setTimeout(revealThenFx, msBeforeDestinationFx);
-    } else {
-      revealThenFx();
-    }
+      if (msBeforeDestinationFx > 0) {
+        setTimeout(revealThenFx, msBeforeDestinationFx);
+      } else {
+        revealThenFx();
+      }
+    });
   };
 
   // Moving to gmlayer removes tokens from the player canvas instantly — no
   // position-change flash, unlike baseOpacity which Roll20 ignores on move renders.
-  token1.set({ layer: "gmlayer" });
-  token2.set({ layer: "gmlayer" });
+  if (
+    !withLiveTokens({ token1Id, token2Id, msg }, ({ token1: liveToken1, token2: liveToken2 }) => {
+      liveToken1.set({ layer: "gmlayer" });
+      liveToken2.set({ layer: "gmlayer" });
+    })
+  ) {
+    return;
+  }
 
   setTimeout(() => {
     spawnTravelFx(pos1, pos2, travelFx);
