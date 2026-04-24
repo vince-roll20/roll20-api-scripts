@@ -142,7 +142,7 @@
       "name": "travel-time",
       "type": "number",
       "default": "0",
-      "description": "Seconds to wait after travel FX before continuing (0-10)."
+      "description": "Travel animation duration in seconds (0-10)."
     },
     {
       "name": "travel-mode",
