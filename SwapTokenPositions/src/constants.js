@@ -202,6 +202,7 @@ export const FLAG_DESTINATION_DELAY = /--destination-delay\b/i;
 export const FLAG_LEGACY_BEAM_FX = /--beam-fx\b/i;
 export const FLAG_LEGACY_BURST_FX = /--burst-fx\b/i;
 export const FLAG_LEGACY_DURATION = /--duration\b/i;
+export const FLAG_LEGACY_MODE = /--mode\b/i;
 
 export const MANAGEMENT_FLAGS = [
   FLAG_SHOW_SETTINGS,

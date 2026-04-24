@@ -11,6 +11,7 @@ import {
   FLAG_LEGACY_BEAM_FX,
   FLAG_LEGACY_BURST_FX,
   FLAG_LEGACY_DURATION,
+  FLAG_LEGACY_MODE,
   FLAG_ORIGIN_FX,
   FLAG_ORIGIN_TIME,
   FLAG_PRESET,
@@ -41,6 +42,38 @@ import { getSettings } from "./state.js";
  */
 export function applyLegacyFlags(msg, config, updateTracker) {
   const content = msg.content;
+  const legacyModeToPreset = {
+    beams: "lightning",
+    transport: "transport",
+  };
+
+  const modeResult = parseStringFlag(
+    content,
+    FLAG_LEGACY_MODE,
+    Object.keys(legacyModeToPreset),
+  );
+
+  if (modeResult.found) {
+    if (modeResult.valid) {
+      const mappedPreset = legacyModeToPreset[modeResult.value];
+      whisperSender(
+        msg,
+        `<code>--mode</code> is deprecated. Use <code>--preset ${mappedPreset}</code> instead.`,
+        "Deprecated Flag",
+        "left",
+      );
+      Object.assign(config, FX_PRESETS[mappedPreset]);
+      updateTracker.valid++;
+    } else {
+      updateTracker.invalid++;
+      whisperSenderError(
+        msg,
+        `Invalid value for deprecated <code>--mode</code>: '${modeResult.value}'.<br><br>Valid: ${Object.keys(legacyModeToPreset).join(", ")}`,
+        "Invalid Input",
+      );
+    }
+  }
+
   const fxMappings = [
     {
       flag: FLAG_LEGACY_BEAM_FX,
