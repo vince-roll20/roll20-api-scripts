@@ -36,7 +36,7 @@
    * @property {string}  PCNames      - Player visibility of PC token names ('Yes'|'No'|'Off').
    * @property {string}  GM_NPCNames  - GM visibility of NPC token names ('Yes'|'No'|'Off').
    * @property {string}  NPCNames     - Player visibility of NPC token names ('Yes'|'No'|'Off').
-   * @property {number}  AuraSize     - Base aura radius before page-scale is applied.
+   * @property {number}  AuraSize     - Feet the aura extends beyond the token edge.
    * @property {string}  Aura1Shape   - Display/default Aura 1 shape shown in output.
    * @property {string}  Aura1Color   - Display/default Aura 1 tint shown in output.
    * @property {number}  Aura2Size    - Display/default Aura 2 radius shown in output.
@@ -62,7 +62,7 @@
     PCNames: "Yes",
     GM_NPCNames: "Yes",
     NPCNames: "Yes",
-    AuraSize: 0.7,
+    AuraSize: 0.35,
     Aura1Shape: "Circle",
     Aura1Color: "00FF00",
     Aura2Size: 5,
@@ -355,16 +355,15 @@
 
   // ————— TOKEN HELPERS —————
   /**
-   * Resets a token to the "Default" state requested by the user:
-   * Aura 1: Green (#00FF00) at 0.7 radius.
-   * Aura 2: Transparent at 5ft radius.
+   * Resets a token to the healthy/default aura state.
+   * Aura 1: Green (#00FF00) ring extending AuraSize feet beyond the token edge.
+   * Roll20 measures aura1_radius from the token edge, so AuraSize maps directly.
    * @param {object} obj - Roll20 token graphic object.
    */
   function applyDefaultAura(obj) {
     if (state.HealthColors.auraTint) {
       obj.set({ tint_color: "transparent" });
     } else {
-      // Set Aura 1 directly to sizeSet (expected 0.7)
       obj.set({
         aura1_color: "#00FF00",
         aura1_radius: state.HealthColors.AuraSize,
@@ -388,21 +387,18 @@
 
   /**
    * Applies a health color to a token via aura or tint depending on configuration.
-   * When in tint mode, sets tint_color. When in aura mode, sets both aura radii and colors.
-   * On a forced update ('YES'), clears the opposing color first to avoid artifacts.
+   * When in tint mode, sets tint_color. When in aura mode, sets aura radius and color.
+   * Roll20 measures aura1_radius from the token edge, so sizeSet maps directly.
    * @param {object} obj         - Roll20 token object.
-   * @param {number} sizeSet     - Base aura size from state (e.g. 0.7).
+   * @param {number} sizeSet     - Feet the ring extends beyond the token edge (e.g. 0.35).
    * @param {string} markerColor - Hex color string derived from health percentage.
    */
   function tokenSet(obj, sizeSet, markerColor) {
-    const page = getObj("page", obj.get("pageid"));
-    const scaleNumber = page.get("scale_number");
-    const scale = scaleNumber / 10;
     if (state.HealthColors.auraTint) {
       obj.set({ tint_color: markerColor });
     } else {
       obj.set({
-        aura1_radius: sizeSet * scale * 1.8,
+        aura1_radius: sizeSet,
         aura1_color: markerColor,
         showplayers_aura1: true,
       });
@@ -978,10 +974,11 @@
     if (!health) return;
 
     const { maxValue, curValue, prevValue } = health;
+    const sizeChanged = prev.width !== obj.get("width") || prev.height !== obj.get("height");
 
-    // NEW in 2.0.5: Only proceed if health actually changed OR it is a forced update.
-    // This stops the script from "fighting" manual aura/color overrides on movement.
-    if (curValue === Number(prevValue) && update !== "YES") return;
+    // Only proceed if health changed, token was resized, or this is a forced update.
+    // The size check ensures aura is re-applied when a token is resized, even without an HP change.
+    if (curValue === Number(prevValue) && update !== "YES" && !sizeChanged) return;
 
     const oCharacter = getObj("character", obj.get("represents"));
     const typeConfig = resolveTypeConfig(oCharacter);
@@ -1153,7 +1150,7 @@
       `PC Sees all PC Names: ${nameBtn(s.PCNames, "!aura pcpc ?{Setting|Yes|No|Off}")}<br>`,
       `PC Sees all NPC Names: ${nameBtn(s.NPCNames, "!aura pcnpc ?{Setting|Yes|No|Off}")}<br>`,
       hr,
-      `Aura 1 Radius (ft): ${makeBtn(s.AuraSize, "!aura size ?{Size?|0.7}")}<br>`,
+      `Aura 1 Radius (ft): ${makeBtn(s.AuraSize, "!aura size ?{Size?|0.35}")}<br>`,
       `Aura 1 Shape: ${makeBtn(s.Aura1Shape, "!aura a1shape ?{Shape?|Circle|Square}")}<br>`,
       `Aura 1 Color (Tint): ${makeBtn(s.Aura1Color, "!aura a1tint ?{Color?|00FF00}", aura1Style)}<br>`,
       `Aura 2 Radius (ft): ${makeBtn(String(s.Aura2Size), "!aura a2size ?{Size?|5}")}<br>`,
