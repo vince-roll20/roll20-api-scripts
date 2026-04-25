@@ -47,6 +47,7 @@
    * @property {string}  HealFX       - Hex color (no '#') used for the healing particle effect.
    * @property {string}  HurtFX       - Hex color (no '#') used for the hurt/damage particle effect.
    * @property {string}  auraDeadFX   - Jukebox track name to play on death, or 'None' to disable.
+   * @property {string}  colorPalette - Health aura colour palette ('default'|'colorblind').
    */
   const DEFAULTS = {
     auraColorOn: true,
@@ -73,6 +74,22 @@
     HealFX: "FDDC5C",
     HurtFX: "FF0000",
     auraDeadFX: "None",
+    colorPalette: "default",
+  };
+
+  const COLOR_PALETTES = {
+    default: {
+      high: [0, 255, 0], // green
+      mid: [255, 255, 0], // yellow
+      low: [255, 0, 0], // red
+      dead: [0, 0, 0], // black
+    },
+    colorblind: {
+      high: [51, 187, 238], // cyan
+      mid: [238, 119, 51], // orange
+      low: [204, 51, 17], // magenta
+      dead: [0, 0, 0], // black
+    },
   };
 
   /**
@@ -199,22 +216,33 @@
 
   // ————— UTILITIES —————
   /**
-   * Converts a health percentage (0–100+) to a red-amber-green hex color.
-   * Values above 100% return blue; 100% is treated as 99% to keep green.
+   * Converts a health percentage (0–100+) to a hex color using the active palette.
+   * Values above 100% return blue; 0% uses dead; 1–100 interpolate low→mid→high.
    * @param {number} pct - Health percentage.
    * @returns {string} A 6-digit hex color string, e.g. '#FF0000'.
    */
   function percentToHex(pct) {
     const normalizedPct = Math.max(0, Number(pct) || 0);
     if (normalizedPct > 100) return "#0000FF";
-    // Cap at 99 so 100% maps to green, not wrapping
-    const p = normalizedPct === 100 ? 99 : normalizedPct;
-    const b = 0;
-    const g = p < 50 ? Math.floor(255 * (p / 50)) : 255;
-    const r = p < 50 ? 255 : Math.floor(255 * ((50 - (p % 50)) / 50));
-    // Bitwise shift used intentionally to build a 6-digit hex color
-    // eslint-disable-next-line no-bitwise
-    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+    const paletteName = state?.HealthColors?.colorPalette || "default";
+    const { high, mid, low, dead } =
+      COLOR_PALETTES[paletteName] || COLOR_PALETTES.default;
+    const rgbToHex = (rgb) =>
+      // eslint-disable-next-line no-bitwise
+      `#${((1 << 24) + (rgb[0] << 16) + (rgb[1] << 8) + rgb[2]).toString(16).slice(1)}`;
+
+    if (normalizedPct === 0) {
+      return rgbToHex(dead);
+    }
+
+    const t =
+      normalizedPct >= 50 ? (normalizedPct - 50) / 50 : normalizedPct / 50;
+    const from = normalizedPct >= 50 ? mid : low;
+    const to = normalizedPct >= 50 ? high : mid;
+    const r = Math.round(from[0] + (to[0] - from[0]) * t);
+    const g = Math.round(from[1] + (to[1] - from[1]) * t);
+    const b = Math.round(from[2] + (to[2] - from[2]) * t);
+    return rgbToHex([r, g, b]);
   }
 
   /**
@@ -272,6 +300,17 @@
     if (shape === "CIRCLE") return "Circle";
     if (shape === "SQUARE") return "Square";
     return fallback;
+  }
+
+  /**
+   * Normalizes a palette name to one of the supported keys.
+   * @param {string} value    - Candidate palette key.
+   * @param {string} fallback - Fallback palette key when invalid.
+   * @returns {string} A valid palette key from COLOR_PALETTES.
+   */
+  function normalizePalette(value, fallback) {
+    const p = (value || "").trim().toLowerCase();
+    return COLOR_PALETTES[p] ? p : fallback;
   }
 
   // ————— WHISPER GM (declared early; used by checkInstall) —————
@@ -355,17 +394,19 @@
 
   // ————— TOKEN HELPERS —————
   /**
-   * Resets a token to the healthy/default aura state.
-   * Aura 1: Green (#00FF00) ring extending AuraSize feet beyond the token edge.
+   * Resets a token to the healthy/default visual state using the palette high color.
+   * In tint mode it applies tint_color; otherwise it sets aura1 color/radius.
    * Roll20 measures aura1_radius from the token edge, so AuraSize maps directly.
    * @param {object} obj - Roll20 token graphic object.
    */
   function applyDefaultAura(obj) {
-    if (state.HealthColors.auraTint) {
-      obj.set({ tint_color: "transparent" });
+    const useTint = state.HealthColors.auraTint;
+    if (useTint) {
+      obj.set({ tint_color: percentToHex(100) });
     } else {
       obj.set({
-        aura1_color: "#00FF00",
+        tint_color: "transparent",
+        aura1_color: percentToHex(100),
         aura1_radius: state.HealthColors.AuraSize,
         showplayers_aura1: true,
       });
@@ -394,10 +435,12 @@
    * @param {string} markerColor - Hex color string derived from health percentage.
    */
   function tokenSet(obj, sizeSet, markerColor) {
-    if (state.HealthColors.auraTint) {
+    const useTint = state.HealthColors.auraTint;
+    if (useTint) {
       obj.set({ tint_color: markerColor });
     } else {
       obj.set({
+        tint_color: "transparent",
         aura1_radius: sizeSet,
         aura1_color: markerColor,
         showplayers_aura1: true,
@@ -559,6 +602,10 @@
       if (state.HealthColors[key] === undefined)
         state.HealthColors[key] = DEFAULTS[key];
     });
+    state.HealthColors.colorPalette = normalizePalette(
+      state.HealthColors.colorPalette,
+      DEFAULTS.colorPalette,
+    );
     if (typeof TokenMod !== "undefined" && TokenMod.ObserveTokenChange) {
       TokenMod.ObserveTokenChange(handleToken);
     }
@@ -762,7 +809,6 @@
     if (deadSfx !== "None" && curValue !== Number(prevValue))
       playDeath(deadSfx);
     obj.set("status_dead", true);
-    clearAuras(obj);
   }
 
   /**
@@ -777,15 +823,15 @@
     const { curValue, prevValue, percReal, markerColor } = health;
     const { isTypeOn, percentOn, showDead } = typeConfig;
     const useAura = oCharacter ? lookupUseColor(oCharacter) : undefined;
-    const colorType = state.HealthColors.auraTint ? "tint" : "aura1";
+    const useTint = state.HealthColors.auraTint;
+    const colorType = useTint ? "tint" : "aura1";
 
-    if (showDead) {
-      applyDeadStatus(obj, curValue, prevValue);
-      if (curValue <= 0) return;
-    }
+    if (showDead) applyDeadStatus(obj, curValue, prevValue);
 
     if (isTypeOn && useAura !== "NO") {
-      if (percReal >= percentOn || curValue === 0) {
+      if (curValue === 0) {
+        tokenSet(obj, state.HealthColors.AuraSize, markerColor);
+      } else if (percReal >= percentOn) {
         applyDefaultAura(obj);
       } else {
         tokenSet(obj, state.HealthColors.AuraSize, markerColor);
@@ -974,11 +1020,13 @@
     if (!health) return;
 
     const { maxValue, curValue, prevValue } = health;
-    const sizeChanged = prev.width !== obj.get("width") || prev.height !== obj.get("height");
+    const sizeChanged =
+      prev.width !== obj.get("width") || prev.height !== obj.get("height");
 
     // Only proceed if health changed, token was resized, or this is a forced update.
     // The size check ensures aura is re-applied when a token is resized, even without an HP change.
-    if (curValue === Number(prevValue) && update !== "YES" && !sizeChanged) return;
+    if (curValue === Number(prevValue) && update !== "YES" && !sizeChanged)
+      return;
 
     const oCharacter = getObj("character", obj.get("represents"));
     const typeConfig = resolveTypeConfig(oCharacter);
@@ -1137,6 +1185,7 @@
       `Is On: ${toggleBtn(s.auraColorOn, "!aura on")}<br>`,
       `Health Bar: ${makeBtn(s.auraBar, "!aura bar ?{Bar|1|2|3}")}<br>`,
       `Use Tint: ${toggleBtn(s.auraTint, "!aura tint")}<br>`,
+      `Palette: ${makeBtn(s.colorPalette, "!aura palette ?{Palette|default|colorblind}", "width:80px")} (auto refreshes all tokens)<br>`,
       `Percentage(PC/NPC): ${makeBtn(percLabel, "!aura perc ?{PCPercent?|100} ?{NPCPercent?|100}")}<br>`,
       hr,
       `Show PC Health: ${toggleBtn(s.PCAura, "!aura pc")}<br>`,
@@ -1152,10 +1201,10 @@
       hr,
       `Aura 1 Radius (ft): ${makeBtn(s.AuraSize, "!aura size ?{Size?|0.35}")}<br>`,
       `Aura 1 Shape: ${makeBtn(s.Aura1Shape, "!aura a1shape ?{Shape?|Circle|Square}")}<br>`,
-      `Aura 1 Color (Tint): ${makeBtn(s.Aura1Color, "!aura a1tint ?{Color?|00FF00}", aura1Style)}<br>`,
+      `Aura 1 Color: ${makeBtn(s.Aura1Color, "!aura a1tint ?{Color?|00FF00}", aura1Style)}<br>`,
       `Aura 2 Radius (ft): ${makeBtn(String(s.Aura2Size), "!aura a2size ?{Size?|5}")}<br>`,
       `Aura 2 Shape: ${makeBtn(s.Aura2Shape, "!aura a2shape ?{Shape?|Square|Circle}")}<br>`,
-      `Aura 2 Color (Tint): ${makeBtn(s.Aura2Color, "!aura a2tint ?{Color?|806600}", aura2Style)}<br>`,
+      `Aura 2 Color: ${makeBtn(s.Aura2Color, "!aura a2tint ?{Color?|806600}", aura2Style)}<br>`,
       `One Offs: ${toggleBtn(s.OneOff, "!aura ONEOFF")}<br>`,
       `FX: ${toggleBtn(s.FX, "!aura FX")}<br>`,
       `HealFX Color: ${makeBtn(s.HealFX, "!aura HEAL ?{Color?|FDDC5C}", healBtnStyle)}<br>`,
@@ -1207,6 +1256,7 @@
       `Is On: ${makePill(s.auraColorOn ? "Yes" : "No", s.auraColorOn ? "" : "background-color:#A84D4D")}<br>`,
       `Bar: ${makePill(s.auraBar)}<br>`,
       `Use Tint: ${makePill(s.auraTint ? "Yes" : "No", s.auraTint ? "" : "background-color:#A84D4D")}<br>`,
+      `Palette: ${makePill(s.colorPalette)}<br>`,
       `Percentage(PC/NPC): ${makePill(percLabel)}<br>`,
       hr,
       `Show PC Health: ${makePill(s.PCAura ? "Yes" : "No", s.PCAura ? "" : "background-color:#A84D4D")}<br>`,
@@ -1222,10 +1272,10 @@
       hr,
       `Aura 1 Radius: ${makePill(String(s.AuraSize))}<br>`,
       `Aura 1 Shape: ${makePill(s.Aura1Shape)}<br>`,
-      `Aura 1 Tint: ${makePill(s.Aura1Color, aura1Style)}<br>`,
+      `Aura 1 Color: ${makePill(s.Aura1Color, aura1Style)}<br>`,
       `Aura 2 Radius: ${makePill(String(s.Aura2Size))}<br>`,
       `Aura 2 Shape: ${makePill(s.Aura2Shape)}<br>`,
-      `Aura 2 Tint: ${makePill(s.Aura2Color, aura2Style)}<br>`,
+      `Aura 2 Color: ${makePill(s.Aura2Color, aura2Style)}<br>`,
       `One Offs: ${makePill(s.OneOff ? "Yes" : "No", s.OneOff ? "" : "background-color:#A84D4D")}<br>`,
       `FX: ${makePill(s.FX ? "Yes" : "No", s.FX ? "" : "background-color:#A84D4D")}<br>`,
       `HealFX Color: ${makePill(s.HealFX, healStyle)}<br>`,
@@ -1243,8 +1293,9 @@
    * Processes incoming Roll20 chat messages to handle !aura commands.
    * GM-only: non-GMs receive an access-denied whisper.
    * Routes each subcommand (ON/OFF, BAR, TINT, PERC, PC, NPC, etc.) to the
-   * appropriate state mutation then refreshes the menu. BAR validates 1/2/3,
-   * whispers confirmation, and triggers immediate full sync.
+  * appropriate state mutation then refreshes the menu. BAR validates 1/2/3,
+  * whispers confirmation, and triggers immediate full sync. PALETTE also
+  * triggers immediate full sync so existing tokens update right away.
    * When a setting changes, also posts a read-only settings snapshot to game chat.
    * Use `!aura settings` to output the current settings snapshot on demand.
    * @param {object} msg - Roll20 chat message object.
@@ -1284,7 +1335,9 @@
         if (/^[123]$/.test(parts[2] || "")) {
           state.HealthColors.auraBar = `bar${parts[2]}`;
           changedSetting = true;
-          gmWhisper(`Health bar set to ${state.HealthColors.auraBar}. Forcing sync...`);
+          gmWhisper(
+            `Health bar set to ${state.HealthColors.auraBar}. Forcing sync...`,
+          );
           menuForceUpdate();
         } else {
           gmWhisper(
@@ -1371,6 +1424,14 @@
           parts[2],
           state.HealthColors.Aura2Color,
         );
+        changedSetting = true;
+        break;
+      case "PALETTE":
+        state.HealthColors.colorPalette = normalizePalette(
+          parts[2],
+          state.HealthColors.colorPalette,
+        );
+        menuForceUpdate();
         changedSetting = true;
         break;
       case "ONEOFF":
