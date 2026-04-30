@@ -102,7 +102,9 @@ export function getLocalizedLanguageName(locale, displayLocale) {
       localizedName ||
       new Intl.DisplayNames([lang], { type: "language" }).of(definition.code);
   } catch (error) {
-    localizedName = localizedName || "";
+    if (!localizedName) {
+      throw error;
+    }
   }
 
   const name = localizedName || definition.name;

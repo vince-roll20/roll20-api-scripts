@@ -5,7 +5,7 @@
  * Name: Condition Tracker
  * Script: ConditionTracker.js
  * Version: 1.0.0
- * Built: 2026-04-30T00:27:47.891Z
+ * Built: 2026-04-30T00:30:05.224Z
  */
 const ConditionTrackerMod = (() => {
   'use strict';
@@ -260,7 +260,7 @@ const ConditionTrackerMod = (() => {
 
   const SCRIPT_NAME = 'Condition Tracker';
   const SCRIPT_VERSION = '1.0.0';
-  const SCRIPT_LAST_UPDATED = '2026-04-30T00:27:47.891Z';
+  const SCRIPT_LAST_UPDATED = '2026-04-30T00:30:05.224Z';
 
   const COLOR_BG_SOFT_BLACK = '#0A0A12';
   const COLOR_TEXT_ARCANE_SILVER = '#E6DFFF';
@@ -6859,7 +6859,9 @@ const ConditionTrackerMod = (() => {
         localizedName ||
         new Intl.DisplayNames([lang], { type: 'language' }).of(definition.code);
     } catch (error) {
-      localizedName = localizedName || '';
+      if (!localizedName) {
+        throw error;
+      }
     }
 
     const name = localizedName || definition.name;
