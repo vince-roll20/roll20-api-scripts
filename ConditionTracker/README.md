@@ -14,7 +14,7 @@
 - Provides GM-only chat menus, a removal menu, configuration commands, and cleanup tools.
 - Automatically prunes conditions when a source or target token is deleted.
 - Creates or updates the `ConditionTrackerWizard` and `ConditionTrackerMultiTarget` GM macros on install.
-- Multi-language output: supports `en-US`, `fr`, `de`, `es`, `pt-BR`, and `ko`. Set with `--config language` or use `--lang` for per-command bilingual output.
+- Multi-language output with localized chat, wizard, help, and handout content. Set with `--config language` or use `--lang` for per-command bilingual output.
 - Uses a modular source tree and Rollup build to generate a paste-ready Roll20 script.
 
 ## Contributor Docs
@@ -64,7 +64,7 @@ All commands are GM-only except `--help`.
 - `!condition-tracker --config icons true|false`
 - `!condition-tracker --config subjectPromptBypass true|false`
 - `!condition-tracker --config healthBar bar1_value|bar2_value|bar3_value`
-- `!condition-tracker --config language en-US|fr|de|es|pt-BR|ko`
+- `!condition-tracker --config language <locale>`
 - `!condition-tracker --config reset`
 
 ## Prompt UI
@@ -163,14 +163,58 @@ Use `!condition-tracker --config reset` to restore all configurable settings and
 | `useIcons`            | `true` / `false`                           | Show short icon codes (e.g. `[G]`) instead of emoji in Turn Tracker rows          |
 | `subjectPromptBypass` | `true` / `false`                           | Skip the optional subject-token step for Spell / Ability / Other effects          |
 | `healthBar`           | `bar1_value` / `bar2_value` / `bar3_value` | Token bar to watch; when it reaches 0 the GM is prompted to clean up conditions   |
-| `language`            | `en-US` / `fr` / `de` / `es` / `pt-BR` / `ko` | Output language for chat messages and the help handout                            |
-| `marker.<Condition>`  | marker name                                | Override the status marker for a specific condition (e.g. `marker Grappled=grab`) |
+| `language`            | Any supported locale                       | Output language for chat messages and the help handout                            |
+| `marker`              | `<Condition>=<marker name>`                | Override the status marker for a specific condition (e.g. `marker Grappled=grab`) |
 
 `subjectPromptBypass` defaults to `false`. Set `!condition-tracker --config subjectPromptBypass true` to skip the Subject prompt for custom effects and force Subject to None. For one-off runs, use `--subjectPromptBypass true|false` directly on the command.
 
 Changing `language` updates both chat output and the generated help handout immediately.
 
 Use `--lang <locale>` on any apply command to emit a second announcement in an additional locale (bilingual mode), without changing the saved language setting.
+
+## Translations
+
+Condition Tracker supports the same language set shown in Roll20 account creation:
+
+| Locale  | Language              | Notes                               |
+| ------- | --------------------- | ----------------------------------- |
+| `af`    | Afrikaans             |                                     |
+| `ca`    | Catalan               | Català                              |
+| `zh-TW` | Chinese (Traditional) | `zh` is accepted as an alias        |
+| `cs`    | Czech                 | Čeština                             |
+| `da`    | Danish                | Dansk                               |
+| `nl`    | Dutch                 | Nederlands                          |
+| `en-US` | English               | `en` is accepted as an alias        |
+| `fi`    | Finnish               | Suomeksi                            |
+| `fr`    | French                | Français                            |
+| `de`    | German                | Deutsch                             |
+| `el`    | Greek                 | Ελληνικά                            |
+| `he`    | Hebrew                | עברית; chat/help/handout render RTL |
+| `hu`    | Hungarian             | Magyar                              |
+| `it`    | Italian               | Italiano                            |
+| `ja`    | Japanese              | 日本語                              |
+| `ko`    | Korean                | 한국어                              |
+| `pl`    | Polish                | Polski                              |
+| `pt-PT` | Portuguese (Portugal) | `pt` is accepted as an alias        |
+| `pt-BR` | Portuguese (Brazil)   | Português - Brasil                  |
+| `ru`    | Russian               | Русский                             |
+| `es`    | Spanish               | Español                             |
+| `sv`    | Swedish               | Svenska                             |
+| `tr`    | Turkish               | Türkçe                              |
+| `uk`    | Ukrainian             | український                         |
+
+The in-game help card and generated handout include an available-translations list with accessible flag images and language names shown in the currently configured language where available. Invalid locale warnings use the same two-column locale table.
+
+### Correcting Translations
+
+If a translation is incorrect, update the relevant file in `src/locales/locale/<locale>.js`.
+
+- `conditions`, `condNames`, and `templates` control Turn Tracker text and apply/remove announcements.
+- `ui` controls chat cards, menus, buttons, warnings, and config/help messages.
+- `handout` controls the generated help handout and the help card tables that reuse handout rows.
+- `languageNames` controls how the available-translations list names each language when this locale is active. Add or correct entries here if the locale list itself reads poorly.
+
+Update `src/locales/metadata.js` only when adding/changing a supported locale code, alias, text direction, flag label, or source file path. After translation edits, run `npm run format` and `npm run build`, then test with `!condition-tracker --config language <locale>`, `!condition-tracker --help`, and `!condition-tracker --reinstall-handout`.
 
 Default marker mappings:
 
@@ -200,6 +244,7 @@ Supported durations:
 - `1 round`
 - `2 rounds`
 - `3 rounds`
+- `10 rounds`
 - Other positive numeric round counts such as `5 rounds`
 
 Durations are updated when the Turn Tracker advances from one token to another. Round counts are anchored to the target token's turn.

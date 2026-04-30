@@ -3,6 +3,12 @@ export const SCRIPT_FILE = "__SCRIPT_FILE__";
 export const SCRIPT_VERSION = "__BUILD_VERSION__";
 export const SCRIPT_LAST_UPDATED = "__BUILD_DATE__";
 
+export {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  VALID_LOCALES,
+} from "./locales/metadata.js";
+
 export const COLOR_BG_SOFT_BLACK = "#0A0A12";
 export const COLOR_TEXT_ARCANE_SILVER = "#E6DFFF";
 export const COLOR_TEXT_DIM_SILVER = "#B8AFCF";
@@ -186,9 +192,6 @@ export const DURATION_OPTIONS = Object.freeze([
   "3 rounds",
   "10 rounds",
 ]);
-
-export const VALID_LOCALES = new Set(["en-US", "fr", "de", "es", "pt-BR", "ko"]);
-export const DEFAULT_LOCALE = "en-US";
 
 export const LOGO_URL_256 =
   "https://files.d20.io/images/485066521/0h0oZF8g-5RuLMztE7mTSw/original.png";

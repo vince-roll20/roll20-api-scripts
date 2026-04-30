@@ -66,7 +66,8 @@ Scope notes:
 | `src/markers.js`    | Marker application/removal helpers with safety checks for shared marker usage.                                |
 | `src/macros.js`     | Macro install/update/reinstall logic for GM convenience macros.                                               |
 | `src/chat.js`       | Chat rendering primitives for cards, tables, buttons, warnings/errors, and whispers.                          |
-| `src/i18n.js`       | Translation dictionaries and locale/string interpolation helpers.                                             |
-| `src/handout.js`    | Generates and installs/updates the in-game help handout.                                                      |
+| `src/i18n.js`       | Locale normalization, translation lookup, fallback handling, locale direction, and localized language names.  |
+| `src/locales/`      | Locale metadata and one translation module per supported Roll20 account language.                             |
+| `src/handout.js`    | Generates and installs/updates the localized in-game help handout.                                            |
 | `src/handout.html`  | Handout HTML template source.                                                                                 |
 | `src/utils.js`      | Shared utility helpers (text conversion, JSON parsing, object lookups, player/GM helpers).                    |

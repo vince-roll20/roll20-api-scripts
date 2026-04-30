@@ -29,16 +29,45 @@
     {
       "name": "healthBar",
       "type": "select",
-      "options": ["bar1_value", "bar2_value", "bar3_value"],
+      "options": [
+        "bar1_value",
+        "bar2_value",
+        "bar3_value"
+      ],
       "default": "bar1_value",
       "description": "Token bar to watch for 0 HP cleanup prompts. Default: bar1_value."
     },
     {
       "name": "language",
       "type": "select",
-      "options": ["en-US", "fr", "de", "es", "pt-BR", "ko"],
+      "options": [
+        "af",
+        "ca",
+        "zh-TW",
+        "cs",
+        "da",
+        "nl",
+        "en-US",
+        "fi",
+        "fr",
+        "de",
+        "el",
+        "he",
+        "hu",
+        "it",
+        "ja",
+        "ko",
+        "pl",
+        "pt-PT",
+        "pt-BR",
+        "ru",
+        "es",
+        "sv",
+        "tr",
+        "uk"
+      ],
       "default": "en-US",
-      "description": "Output language for chat messages and the generated help handout. Default: en-US."
+      "description": "Output language for chat messages and the generated help handout. Supports Roll20 account languages; aliases en, zh, and pt are accepted in chat commands. Default: en-US."
     },
     {
       "name": "markerGrappled",
@@ -147,6 +176,8 @@
   "modifies": {
     "Campaign.turnorder": "read,write",
     "Campaign.playerpageid": "read",
+    "graphic._pageid": "read",
+    "graphic.subtype": "read",
     "graphic.statusmarkers": "read,write",
     "graphic.bar1_value": "read",
     "graphic.bar2_value": "read",
@@ -157,9 +188,11 @@
     "graphic.controlledby": "read",
     "character.name": "read",
     "character.controlledby": "read",
+    "attribute._characterid": "read",
+    "attribute.name": "read",
     "attribute.current": "read",
     "macro.name": "read,write",
-    "macro.playerid": "read",
+    "macro.playerid": "read,write",
     "macro.action": "write",
     "macro.visibleto": "write",
     "macro.istokenaction": "write",

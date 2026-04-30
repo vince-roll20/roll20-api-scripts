@@ -13,7 +13,6 @@ import {
   SCRIPT_NAME,
   SCRIPT_VERSION,
   STANDARD_CONDITIONS,
-  VALID_LOCALES,
 } from "./constants.js";
 import {
   buildApplyMessage,
@@ -74,7 +73,13 @@ import {
 import { runCleanup } from "./cleanup.js";
 import { installMacro } from "./macros.js";
 import { installHandout } from "./handout.js";
-import { t, tRaw, getLocale } from "./i18n.js";
+import {
+  getLocale,
+  getLocalizedLanguageName,
+  LOCALE_DEFINITIONS,
+  t,
+  tRaw,
+} from "./i18n.js";
 
 const SUBJECT_NONE = "__none__";
 
@@ -112,6 +117,156 @@ function heading(text) {
  */
 function code(text) {
   return `<code>${escapeHtml(text)}</code>`;
+}
+
+/**
+ * Decodes simple HTML entities used in localized handout source text before chat escaping.
+ *
+ * @param {*} value Localized value.
+ * @returns {string} Text ready for the chat escaping pipeline.
+ */
+function decodeHelpText(value) {
+  return toText(value)
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
+/**
+ * Builds a Twemoji asset URL for a locale flag.
+ *
+ * @param {string} flag Unicode regional-indicator flag.
+ * @returns {string} SVG asset URL or an empty string.
+ */
+function flagAssetUrl(flag) {
+  const codepoints = Array.from(toText(flag))
+    .map((character) => character.codePointAt(0).toString(16))
+    .join("-");
+  return codepoints
+    ? `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${codepoints}.svg`
+    : "";
+}
+
+/**
+ * Builds an accessible flag image label for chat output.
+ *
+ * @param {object} locale Locale metadata.
+ * @returns {string} Trusted HTML flag fragment.
+ */
+function localeFlag(locale) {
+  const label = escapeHtml(locale.flagLabel || locale.name);
+  const url = flagAssetUrl(locale.flag);
+  if (!url) {
+    return "";
+  }
+  return `<img src="${escapeHtml(url)}" alt="${label}" title="${label}" style="width:1.1em;height:1.1em;vertical-align:-0.15em;margin-right:4px;" />`;
+}
+
+/**
+ * Builds the readable language label for a locale in the active configured language.
+ *
+ * @param {object} locale Locale metadata.
+ * @returns {string} Trusted HTML locale label.
+ */
+function localeLabel(locale) {
+  const displayLocale = getConfig().language;
+  return `${localeFlag(locale)} ${escapeHtml(getLocalizedLanguageName(locale.code, displayLocale))}`;
+}
+
+/**
+ * Builds a readable locale name for confirmation messages without flag imagery.
+ *
+ * @param {string} localeCode Locale code.
+ * @returns {string} Human-readable locale label.
+ */
+function localeDisplayName(localeCode) {
+  const locale = LOCALE_DEFINITIONS.find(
+    (definition) => definition.code === localeCode,
+  );
+  if (!locale) {
+    return localeCode;
+  }
+
+  const nativeName =
+    locale.nativeName && locale.nativeName !== locale.name
+      ? ` (${locale.nativeName})`
+      : "";
+  return `${locale.name}${nativeName} [${locale.code}]`;
+}
+
+/**
+ * Builds a localized intro for invalid locale warnings.
+ *
+ * @param {string} locale Active locale.
+ * @returns {string} Intro text ending before the locale table.
+ */
+function invalidLocaleIntro(locale) {
+  return t("ui.msg.invalidLocale", locale, { locales: "" })
+    .replace(/\s*:?\s*\.?$/, ":")
+    .trim();
+}
+
+/**
+ * Builds rows for the supported-locale help table.
+ *
+ * @returns {string[][]} Trusted HTML table rows.
+ */
+function localeTableRows() {
+  return LOCALE_DEFINITIONS.map((locale) => [
+    code(locale.code),
+    localeLabel(locale),
+  ]);
+}
+
+/**
+ * Builds a token choice button for the requested wizard slot.
+ *
+ * @param {object} token Token entry.
+ * @param {object} args Current wizard args.
+ * @param {"source"|"target"} slot Which slot to fill.
+ * @returns {object} Trusted HTML button.
+ */
+function buildTokenChoiceButton(token, args, slot) {
+  return buildButton(
+    token.name,
+    buildWizardBase({ ...args, [slot]: token.id }),
+  );
+}
+
+/**
+ * Builds the command URL for a duration choice.
+ *
+ * @param {object} args Current wizard args.
+ * @param {string} duration Canonical duration label.
+ * @returns {string} Roll20 API command.
+ */
+function buildDurationCommand(args, duration) {
+  const sourceId = toText(args.source);
+  const targetId = toText(args.target);
+  const targetsRaw = toText(args.targets);
+  const condition = getCanonicalCondition(toText(args.condition));
+  const langRaw = toText(args.lang);
+  const parts = [
+    `--source ${sourceId}`,
+    targetsRaw ? `--targets ${targetsRaw}` : `--target ${targetId}`,
+    `--condition ${condition}`,
+    `--duration ${duration}`,
+  ];
+  if (langRaw) parts.push(`--lang ${langRaw}`);
+  return buildCommand(parts);
+}
+
+/**
+ * Converts localized handout rows into escaped chat table rows.
+ *
+ * @param {string[][]} rows Raw localized rows.
+ * @returns {string[][]} Escaped HTML rows.
+ */
+function toEscapedHandoutTableRows(rows) {
+  return rows.map(([a, b]) => [
+    code(decodeHelpText(a)),
+    escapeHtml(decodeHelpText(b)),
+  ]);
 }
 
 /**
@@ -405,11 +560,12 @@ function showTokenStep(playerId, title, args, slot, description) {
     return;
   }
 
-  const makeButton = (tok) =>
-    buildButton(tok.name, buildWizardBase({ ...args, [slot]: tok.id }));
-
-  const playerButtons = tokens.filter((tok) => tok.isPlayer).map(makeButton);
-  const npcButtons = tokens.filter((tok) => !tok.isPlayer).map(makeButton);
+  const playerButtons = tokens
+    .filter((tok) => tok.isPlayer)
+    .map((tok) => buildTokenChoiceButton(tok, args, slot));
+  const npcButtons = tokens
+    .filter((tok) => !tok.isPlayer)
+    .map((tok) => buildTokenChoiceButton(tok, args, slot));
   const tableRows = buildTwoColumnRows(playerButtons, npcButtons);
 
   const body = [];
@@ -527,22 +683,6 @@ function showConditionStep(playerId, args) {
  */
 function showDurationStep(playerId, args) {
   const locale = getConfig().language;
-  const sourceId = toText(args.source);
-  const targetId = toText(args.target);
-  const targetsRaw = toText(args.targets);
-  const condition = getCanonicalCondition(toText(args.condition));
-  const langRaw = toText(args.lang);
-
-  const makeCmd = (dur) => {
-    const parts = [
-      `--source ${sourceId}`,
-      targetsRaw ? `--targets ${targetsRaw}` : `--target ${targetId}`,
-      `--condition ${condition}`,
-      `--duration ${dur}`,
-    ];
-    if (langRaw) parts.push(`--lang ${langRaw}`);
-    return buildCommand(parts);
-  };
 
   // English canonical values used in command URLs; localized labels shown on buttons
   const leftOptions = [
@@ -563,13 +703,15 @@ function showDurationStep(playerId, args) {
     { dur: "10 rounds", label: t("ui.dur.round10", locale) },
   ];
   const customPrompt = t("ui.dur.customPrompt", locale);
-  const customCmd = makeCmd(`?{${customPrompt}|} rounds`);
+  const customCmd = buildDurationCommand(args, `?{${customPrompt}|} rounds`);
 
   const leftButtons = leftOptions.map(({ dur, label }) =>
-    buildButton(label, makeCmd(dur)),
+    buildButton(label, buildDurationCommand(args, dur)),
   );
   const rightButtons = [
-    ...rightOptions.map(({ dur, label }) => buildButton(label, makeCmd(dur))),
+    ...rightOptions.map(({ dur, label }) =>
+      buildButton(label, buildDurationCommand(args, dur)),
+    ),
     buildButton(t("ui.dur.custom", locale), customCmd),
   ];
 
@@ -1298,12 +1440,16 @@ export function updateLocaleConfig(playerId, value) {
   const result = validateLocale(value);
   if (!result.valid) {
     const locale = getConfig().language;
-    whisperWarning(
-      playerId,
-      t("ui.msg.invalidLocale", locale, {
-        locales: [...VALID_LOCALES].join(", "),
-      }),
-    );
+    whisperWarning(playerId, [
+      invalidLocaleIntro(locale),
+      htmlTable(
+        [
+          t("handout.availableLocales.colLocale", locale),
+          t("handout.availableLocales.colLanguage", locale),
+        ],
+        localeTableRows(),
+      ),
+    ]);
     return;
   }
 
@@ -1312,7 +1458,9 @@ export function updateLocaleConfig(playerId, value) {
     (config) => {
       config.language = result.value;
     },
-    t("ui.msg.langSet", result.value, { locale: result.value }),
+    t("ui.msg.langSet", result.value, {
+      locale: localeDisplayName(result.value),
+    }),
     result.value,
   );
 
@@ -1568,12 +1716,10 @@ export function showHelp(playerId) {
     tRaw("handout.configuration.rows", locale) || []
   );
 
-  const toTableRows = (rows) => rows.map(([a, b]) => [code(a), escapeHtml(b)]);
-
   const configTableRows = configRows.map(([option, values, description]) => [
-    code(option),
-    escapeHtml(values),
-    escapeHtml(description),
+    code(decodeHelpText(option)),
+    escapeHtml(decodeHelpText(values)),
+    escapeHtml(decodeHelpText(description)),
   ]);
 
   whisper(playerId, t("ui.title.help", locale), [
@@ -1585,7 +1731,7 @@ export function showHelp(playerId) {
         [escapeHtml(HANDOUT_NAME), escapeHtml(t("handout.subtitle", locale))],
         [
           escapeHtml(t("handout.overview.heading", locale)),
-          escapeHtml(t("handout.overview.body", locale)),
+          escapeHtml(decodeHelpText(t("handout.overview.body", locale))),
         ],
       ],
     ),
@@ -1596,7 +1742,7 @@ export function showHelp(playerId) {
         t("handout.commandsRef.colFlag", locale),
         t("handout.commandsRef.colDesc", locale),
       ],
-      toTableRows(commandRows),
+      toEscapedHandoutTableRows(commandRows),
     ),
     sectionSpacer(),
     heading(t("handout.configuration.heading", locale)),
@@ -1609,13 +1755,23 @@ export function showHelp(playerId) {
       configTableRows,
     ),
     sectionSpacer(),
+    heading(t("handout.availableLocales.heading", locale)),
+    t("handout.availableLocales.intro", locale),
+    htmlTable(
+      [
+        t("handout.availableLocales.colLocale", locale),
+        t("handout.availableLocales.colLanguage", locale),
+      ],
+      localeTableRows(),
+    ),
+    sectionSpacer(),
     heading(t("ui.heading.examples", locale)),
     htmlTable(
       [
         t("handout.quickStart.colCommand", locale),
         t("handout.quickStart.colDesc", locale),
       ],
-      toTableRows(quickStartRows),
+      toEscapedHandoutTableRows(quickStartRows),
     ),
     sectionSpacer(),
   ]);

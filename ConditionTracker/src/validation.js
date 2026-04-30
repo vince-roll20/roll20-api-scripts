@@ -2,14 +2,13 @@ import {
   BOOLEAN_TEXT,
   CONDITION_OTHER,
   VALID_HEALTH_BARS,
-  VALID_LOCALES,
 } from "./constants.js";
 import {
   getCanonicalCondition,
   isCustomEffectType,
   isCustomTextCondition,
 } from "./conditions.js";
-import { t } from "./i18n.js";
+import { normalizeLocale, SUPPORTED_LOCALE_LIST, t } from "./i18n.js";
 import { getConfig } from "./state.js";
 import { getGraphicToken, toText } from "./utils.js";
 
@@ -134,11 +133,11 @@ export function validateHealthBar(value) {
  */
 export function validateLocale(value) {
   const locale = getConfig().language;
-  const text = toText(value);
-  if (!VALID_LOCALES.has(text)) {
+  const text = normalizeLocale(value);
+  if (!text) {
     return invalid(
       t("ui.msg.invalidLocale", locale, {
-        locales: [...VALID_LOCALES].join(", "),
+        locales: SUPPORTED_LOCALE_LIST,
       }),
     );
   }

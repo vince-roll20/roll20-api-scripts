@@ -15,7 +15,7 @@ This checklist validates `ConditionTracker.js` in a live Roll20 VTT game before 
 1. Restart sandbox.
    - Expected: API console logs readiness and GMs receive a ready whisper.
 2. Run `!condition-tracker --help`.
-   - Expected: Help is whispered and no token selection is required.
+   - Expected: Help is whispered, no token selection is required, and the available translations table is present without a translation-file column.
 3. Confirm both the `ConditionTrackerWizard` and `ConditionTrackerMultiTarget` macros exist.
 4. Run `!condition-tracker --reinstall-macro`.
    - Expected: Both macros are recreated and a confirmation whisper is sent to the GM.
@@ -98,18 +98,36 @@ This checklist validates `ConditionTracker.js` in a live Roll20 VTT game before 
    - Expected: HP cleanup uses `bar2_value`.
 5. Run `!condition-tracker --config language fr`.
    - Expected: Confirmation whisper is sent in French; subsequent messages arrive in French.
-6. Run `!condition-tracker --config language en-US` to restore defaults.
-7. Apply a condition with `--lang fr` appended.
-   - Expected: Two public announcements appear — one in English and one in French.
-8. Run `!condition-tracker --config reset` after changing multiple settings.
-   - Expected: Config values and marker mappings return to defaults, and the help handout is regenerated in the default language.
-9. Delete a source or target token with active tracked conditions.
-   - Expected: Related active conditions are removed immediately and corresponding custom Turn Tracker rows disappear without running cleanup.
-10. Manually delete a custom Condition Tracker row from the Turn Tracker without using the remove menu, then cause a turn-order change.
+6. Run `!condition-tracker --config language en`.
+   - Expected: The language is accepted and saved as `en-US`.
+7. Run `!condition-tracker --config language zh`.
+   - Expected: The language is accepted and saved as `zh-TW`; help/menu/handout text uses Traditional Chinese.
+8. Run `!condition-tracker --config language pt`.
+   - Expected: The language is accepted and saved as `pt-PT`.
+9. Run `!condition-tracker --config language he`.
+   - Expected: Chat/help output uses Hebrew labels and right-to-left layout.
+10. Open the generated handout after switching to Hebrew.
+    - Expected: The handout uses right-to-left layout and the translations list shows accessible flag images.
+11. Run `!condition-tracker --config language made-up-locale`.
+    - Expected: A warning is whispered with the same two-column available-translations table used by help.
+12. Run `!condition-tracker --config language en-US` to restore defaults.
+13. Apply a condition with `--lang fr` appended.
+
+- Expected: Two public announcements appear — one in English and one in French.
+
+14. Run `!condition-tracker --config reset` after changing multiple settings.
+
+- Expected: Config values and marker mappings return to defaults, and the help handout is regenerated in the default language.
+
+15. Delete a source or target token with active tracked conditions.
+
+- Expected: Related active conditions are removed immediately and corresponding custom Turn Tracker rows disappear without running cleanup.
+
+16. Manually delete a custom Condition Tracker row from the Turn Tracker without using the remove menu, then cause a turn-order change.
 
 - Expected: The stale state entry is reconciled automatically, its marker is cleaned up when safe, and the removal menu no longer lists the missing row.
 
-11. Run `!condition-tracker --cleanup` after deletion.
+17. Run `!condition-tracker --cleanup` after deletion.
 
 - Expected: No additional stale entries remain for the deleted token; summary should not report newly discovered orphaned conditions from that deletion.
 

@@ -11,7 +11,7 @@ import {
   LOGO_URL_256,
   SCRIPT_NAME,
 } from "./constants.js";
-import { t } from "./i18n.js";
+import { isRtlLocale, t } from "./i18n.js";
 import { getConfig } from "./state.js";
 import { escapeHtml, getGmPlayerIds, toText } from "./utils.js";
 
@@ -67,6 +67,30 @@ const CHAT_HEADER_WARNING_STYLE = [
   "font-weight:bold",
   "text-align:center",
 ].join(";");
+
+/**
+ * Builds inline text direction styles for the active chat locale.
+ *
+ * @param {string} locale Locale code.
+ * @returns {string} Inline CSS direction and alignment.
+ */
+function getDirectionStyle(locale) {
+  return isRtlLocale(locale)
+    ? "direction:rtl;text-align:right"
+    : "direction:ltr;text-align:left";
+}
+
+/**
+ * Returns the table header style adjusted for locale direction.
+ *
+ * @param {string} locale Locale code.
+ * @returns {string} Inline CSS for table headers.
+ */
+function getTableHeaderStyle(locale) {
+  return isRtlLocale(locale)
+    ? TABLE_HEADER_STYLE.replace("text-align:left", "text-align:right")
+    : TABLE_HEADER_STYLE;
+}
 
 const CHAT_HEADER_ERROR_STYLE = [
   "background:#FEE2E2",
@@ -149,7 +173,7 @@ export function buildBox(title, lines) {
     toText(title) === t("ui.title.scriptReady", locale)
       ? `😎 ${safeTitle} 😎`
       : `ℹ️ ${safeTitle}`;
-  return buildStyledBox(lines, CHAT_HEADER_STYLE, headerLabel);
+  return buildStyledBox(lines, CHAT_HEADER_STYLE, headerLabel, locale);
 }
 
 /**
@@ -163,6 +187,7 @@ function buildWarningBox(lines, locale) {
     lines,
     CHAT_HEADER_WARNING_STYLE,
     `⚠️ ${escapeHtml(t("ui.title.warning", locale))}`,
+    locale,
   );
 }
 
@@ -177,6 +202,7 @@ function buildErrorBox(lines, locale) {
     lines,
     CHAT_HEADER_ERROR_STYLE,
     `❌ ${escapeHtml(t("ui.title.error", locale))}`,
+    locale,
   );
 }
 
@@ -212,14 +238,16 @@ export function whisperError(playerId, body) {
  * @param {string[]} lines Message body lines.
  * @param {string} headerStyle Header style string.
  * @param {string} headerText Header label.
+ * @param {string} locale Locale for text direction.
  * @returns {string} Chat HTML.
  */
-function buildStyledBox(lines, headerStyle, headerText) {
+function buildStyledBox(lines, headerStyle, headerText, locale) {
   const body = buildBody(lines);
+  const directionStyle = getDirectionStyle(locale);
   const logo = `<div style="text-align:center;padding:6px 0 4px;"><img src="${LOGO_URL_256}" style="height:48px;width:auto;" alt="${SCRIPT_NAME} logo" title="${SCRIPT_NAME}" /></div>`;
   const header = `<div style="${headerStyle}">${headerText}</div>`;
-  const content = `<div style="${CHAT_CONTENT_STYLE}">${body}</div>`;
-  return `<div style="${CHAT_CARD_STYLE}">${logo}${header}${content}</div>`;
+  const content = `<div style="${CHAT_CONTENT_STYLE};${directionStyle}">${body}</div>`;
+  return `<div style="${CHAT_CARD_STYLE};${directionStyle}">${logo}${header}${content}</div>`;
 }
 
 /**
@@ -359,10 +387,13 @@ export function buildRemoveButton(condition) {
  * @returns {object} Trusted HTML line.
  */
 export function htmlTable(headers, rows) {
+  const locale = getConfig().language;
+  const tableHeaderStyle = getTableHeaderStyle(locale);
+  const directionStyle = getDirectionStyle(locale);
   const headerCells = headers
     .map(
       (header) =>
-        `<th style="${TABLE_HEADER_STYLE}"><strong>${escapeHtml(header)}</strong></th>`,
+        `<th style="${tableHeaderStyle}"><strong>${escapeHtml(header)}</strong></th>`,
     )
     .join("");
 
@@ -372,14 +403,14 @@ export function htmlTable(headers, rows) {
         `<tr>${cells
           .map(
             (cell) =>
-              `<td style="padding:2px 4px;vertical-align:top;">${getTrustedHtml(cell)}</td>`,
+              `<td style="padding:2px 4px;vertical-align:top;${directionStyle}">${getTrustedHtml(cell)}</td>`,
           )
           .join("")}</tr>`,
     )
     .join("");
 
   return rawHtml(
-    `<table style="width:100%;border-collapse:collapse;"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`,
+    `<table style="width:100%;border-collapse:collapse;${directionStyle}"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`,
   );
 }
 

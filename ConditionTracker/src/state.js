@@ -4,8 +4,8 @@ import {
   SCRIPT_VERSION,
   STATE_KEY,
   VALID_HEALTH_BARS,
-  VALID_LOCALES,
 } from "./constants.js";
+import { normalizeLocale } from "./i18n.js";
 import { isRecord } from "./utils.js";
 
 const GLOBAL_CONFIG_KEY = STATE_KEY.toLowerCase();
@@ -106,9 +106,7 @@ export function mergeConfig(config) {
     healthBar: VALID_HEALTH_BARS.includes(nextConfig.healthBar)
       ? nextConfig.healthBar
       : defaults.healthBar,
-    language: VALID_LOCALES.has(nextConfig.language)
-      ? nextConfig.language
-      : defaults.language,
+    language: normalizeLocale(nextConfig.language) || defaults.language,
     markers: { ...defaults.markers, ...markers },
   };
 }
@@ -165,8 +163,9 @@ export function applyGlobalConfig() {
     nextConfig.healthBar = options.healthBar;
   }
 
-  if (VALID_LOCALES.has(options.language)) {
-    nextConfig.language = options.language;
+  const language = normalizeLocale(options.language);
+  if (language) {
+    nextConfig.language = language;
   }
 
   const nextMarkers = { ...config.markers };
