@@ -6,9 +6,10 @@ const imageeditor = (() => {
 on("ready", () => {
     'use strict';
  
-    const version = '1.0.0';
+    const version = '1.0.1';
     log('-=> Image Editor v' + version + ' is loaded. Use !imageeditor to create interface');
     // 1.0.0 Debut
+    // 1.0.1 Added warning for large referenced handouts, which can cause the browser to become unresponsive if open simultaneously with the editor.
 
  
     // ==================================================
