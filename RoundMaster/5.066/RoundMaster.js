@@ -150,6 +150,9 @@ API_Meta.RoundMaster={offset:Number.MAX_SAFE_INTEGER,lineCount:-1};
  * v5.065  17/02/2026 Fixed issue with stench of decay. Added status move when individual players
  *                    change page differently from the ribbon.
  * v5.066  11/05/2026 Fixed issue with many areas of effect using maths for range or dimentions.
+ *                    Trapped ghost token ids, informing GM of error.  Preserved caster id when asting
+ *                    AREA effect spells. Use character ID when ending effects on a deleted token. If
+ *                    a player is not present, redirect their messages to the GM.
  **/
  
 var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
@@ -1946,6 +1949,33 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 	}; 
 	
 	/*
+	 * Check the id returned for a targeted token is real
+	 */
+	
+	const checkObjectExists = function( id ) {
+		let errMsg = '';
+		let objType = '';
+		let objs = [getObj('graphic',id)];
+		if (_.isUndefined(objs[0])) {
+			objs = findObjs({_id:id});
+		};
+		if (!_.isUndefined(objs) && !_.isUndefined(objs[0])) {
+			objType = objs[0].get('_type');
+		};
+		
+		if (_.isUndefined(objs) || !objs.length) {
+			errMsg = 'does not refer to any object in this campaign';
+		} else if (!_.isUndefined(objType) && objType !== 'graphic') {
+			errMsg = 'is not a token_id but instead refers to a '+objs[0].get('_type');
+		}
+//		log('checkObjectExists: errMsg = '+errMsg+', objType = '+objType);
+		if (errMsg && errMsg.length) {
+			sendError(`<div>Object ID invalid.  The object ID returned by @{target|token_id} was ${id} which ${errMsg}. You may find every token returns the same token_id when you use @{target|token_id}. As far as I am aware this is a Roll20 bug. Please <a class="showtip tipsy" title="Richard @ Damery's profile on Roll20." style="color:blue; text-decoration: underline;" href="https://app.roll20.net/users/6497708/richard-at-damery">send me this information</a></div>`);
+		}
+		return;
+	}
+	
+	/*
 	 * Determine if the token is controlled by a player
 	 */
 
@@ -2175,7 +2205,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 				return '';
 			} else {
 				if (!(/[eiou]/i.test(orig[1]))) v = '('+orig[1]+')';
-//				log('rounds evalAttr: arg = '+arg+', orig = '+orig+', v = '+v);
 				v = v.replace(/;/g,',')
 					 .replace(/\[\[/g,'(')
 					 .replace(/\]\]/g,')')
@@ -2229,8 +2258,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 	 
 	var grantTokenAccess = function( playerId, pageId, grant=false, objList={} ) {
 		
-//		log('grantTokenAccess: called. playerId = '+playerId+', pageId = '+pageId+', grant = '+grant);
-		
 		if (playerIsGM(playerId)) return;
 		if (_.isUndefined(objList.sighted)) objList.sighted = [];
 		if (_.isUndefined(objList.blind)) objList.blind = [];
@@ -2245,7 +2272,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 				if (!controllers.length && sight) obj.set('has_bright_light_vision',false);
 				if (sight) objList.sighted.push(obj);
 				else objList.blind.push(obj);
-//				log('grantTokenAccess: listing '+obj.get('name'));
 				return true;
 			});
 			_.each( tempList, obj => {
@@ -2253,7 +2279,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 				let controllers = charObj.get('controlledby');
 				if (controllers.includes(playerId)) return;
 				charObj.set('controlledby',controllers+','+playerId);
-//				log('grantTokenAccess: granting access to '+charObj.get('name')+' for '+playerId);
 			});
 		} else {
 			_.each( objList.sighted, obj => {
@@ -2261,13 +2286,11 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 				charObj.set('controlledby',charObj.get('controlledby').split(',').filter((pid) => pid !== playerId).join(','));
 				obj.set('has_bright_light_vision',true);
 				obj.set('left',(1+obj.get('left')));
-//				log('grantTokenAccess: sighting '+obj.get('name'));
 			});
 			_.each( objList.blind, obj => {
 				let charObj = getObj('character',obj.get('represents'));
 				charObj.set('controlledby',charObj.get('controlledby').split(',').filter((pid) => pid !== playerId).join(','));
 				obj.set('left',(1+obj.get('left')));
-//				log('grantTokenAccess: removing control from '+obj.get('name'));
 			});
 			objList = undefined;
 		};
@@ -3804,14 +3827,16 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 		if (!args[5]) {
 		    args[5]='';
 		}
+		let targetID = args.shift().trim();
 
-		var target = getObj('graphic', args.shift().trim());
+		var target = getObj('graphic', targetID);
 		
 		if (!target) {
 			log('doAddTargetStatus: invalid target - args = '+args);
 		    // RED v3.002 If dealing with an effect triggered by anyone
 		    // deleting a token with effects on it, the token may
 		    // legitimately no longer exist
+			checkObjectExists(targetID);
 		    return;
 		}
 //		args = args.join('|');
@@ -4000,7 +4025,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 			let parsedSpec = parseStr(saveSpec).replace(/;/g,':');
 			let save = [...('['+parsedSpec+']').matchAll(reCheck)];
 			let isResist = reResist.test(parsedSpec) && !reSave.test(parsedSpec); 
-//			log('doAddStatus: saveSpec = '+parsedSpec+', reResist test = '+reResist.test(parsedSpec)+', reSave test = '+reSave.test(parsedSpec)+', isResist = '+isResist);
 			_.each(selection,function(e) {
 				curToken = getObj('graphic', e._id);
 				if (!curToken || curToken.get('_subtype') !== 'token' || curToken.get('isdrawing')) {
@@ -4170,7 +4194,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 					// Remove markers
 					return imgContent;
 				} catch (e) {
-//					log('AttackMaster buildMonsterAttkMacros: JavaScript '+e.name+': '+e.message+' while processing monster '+charName);
 					sendDebug('AttackMaster buildMonsterAttkMacros: JavaScript '+e.name+': '+e.message+' while processing monster '+charName);
 					sendCatchError('AttackMaster',msg_orig[senderId],e);
 					errFlag = true;
@@ -5702,7 +5725,7 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 					rotation: chRotation,
 					represents: charID,
 			});
-//			setTimeout( () => toBack(crossHair), 1000);
+			setTimeout( () => toBack(crossHair), 1000);
 			
 			casterID = args[8];
 			args = args.slice(9);
@@ -6375,13 +6398,16 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 			tokenName,
 			argString,
 			content;
+			
+//		log('doTarget: curToken is '+(_.isUndefined(curToken) ? 'undefined' : 'a token'));
 		
 		if (!curToken) {
 			sendDebug('doTarget: invalid tokenID parameter');
+			checkObjectExists( tokenID );
 			sendError('Invalid roundMaster parameters');
 			return;
 		}
-		if (!['CASTER','TARGET','SINGLE','AREA','ATTACK','MULTI'].includes(command.toUpperCase())) {
+		if (!['CASTER','TARGET','SINGLE','AREA','ATTACK','MULTI'].includes(command)) {
 			sendError('Invalid targeting command: must be CASTER, SINGLE, ATTACK, AREA or MULTI');
 			return;
 		}
@@ -6422,11 +6448,11 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 
 		args = argString.split('|');
 		if (command == 'AREA') {
-			tokenID = args.shift();
+			let targetToken = args.shift();
 			content = '&{template:'+fields.defaultTemplate+'}{{name=Target Area-Effect Spell}}'
 					+ '{{[Select another target](!rounds --target'+(checkSave ? '-save' : (asGM ? '-nosave' : ''))+' '+command+'|'+tokenID+'|&#64;{target|Select Next Target|token_id}|'+args.join('|')+') or just do something else}}';
 			sendResponse( senderId, content );
-			args.unshift(tokenID);
+			args.unshift(targetToken);
 		}
 
 		return;
@@ -6992,18 +7018,20 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 	 * is invalid.
 	 */
 	var sendResponse = function(pid,msg,as,img) {
-		if (!pid || !msg) 
-			{return null;}
+		if (!msg) 
+		{return null;}
+		else if (!pid) {
+			sendFeedback(msg);
+			return;
+		}
 		var player = getObj('player',pid),
 			to; 
-		if (player) {
+		if (player && player.get('online') == true) {
 			to = '/w "' + player.get('_displayname') + '" ';
 		} else {
 			// RED: v3.003 softened the treatment of invalid playerIDs
 			// RED: as a bug in the Transmogrifier seems to create these
 			// throw('could not find player: ' + to);
-			sendDebug('sendResponse: invalid pid passed');
-			sendError('Could not find player: ' + pid);
 			to = '/w gm ';
 		}
 		var content = to
@@ -7383,7 +7411,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 						//temp cmd
 						let obj = getObj('graphic',arg[0]);
 						if (obj) {
-//							log('setsight: setting '+obj.get('name')+' light_hassight to '+(arg[1].toLowerCase() === 'true'))
 							obj.set('has_bright_light_vision',(arg[1].toLowerCase() === 'true'));
 						} else {
 							log('setsight: invalid object id');
@@ -7429,7 +7456,6 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
     		return;
 		}
 		if (msg.type === 'api' && !_.isUndefined(undoList[senderId])) {
-//			log('roundMaster handleChatMessage: removing token access for '+senderId);
 			undoList[senderId] = grantTokenAccess( senderId, null, false, undoList[senderId] );
 		}
 
@@ -7669,7 +7695,7 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 									represents: oldRepresents
 							}), function(t) {return t.id != oldID});
 			};
-
+			
 			if (newToken) {
 				// If found a match, just add the effect markers and effects
 				newEffects = getStatusEffects(newToken);
@@ -7724,7 +7750,7 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 								macroBody = macroBody.replace( /\^\^cname\^\^/gi , cname )
 													 .replace( /\^\^tname\^\^/gi , oldName )
 													 .replace( /\^\^cid\^\^/gi , oldRepresents )
-													 .replace( /\^\^tid\^\^/gi , oldID )
+													 .replace( /\^\^tid\^\^/gi , oldRepresents )
 													 .replace( /\^\^bar1_current\^\^/gi , bar1 )
 													 .replace( /\^\^bar2_current\^\^/gi , bar2 )
 													 .replace( /\^\^bar3_current\^\^/gi , bar3 )
@@ -7742,7 +7768,13 @@ var RoundMaster = (function() {		// eslint-disable-line no-unused-vars
 													 .replace( /\^\^token_hp_max\^\^/gi , hpField.max );
 								sendDebug('handleDestroyToken: macroBody is ' + macroBody );
 								sendChat('',macroBody,null,{noarchive:!flags.archive, use3d:false});
-								
+								let pid = charCS.get('controlledby').split(',')[0];
+								let delMsg = `All ${oldName} tokens have been deleted, so all effects caused by the status of ${oldName} have been removed from ${cname}`;
+								if (pid) {
+									sendResponse(pid,delMsg);
+								} else {
+									sendFeedback(delMsg);
+								}
 							}
 						}
 					}
