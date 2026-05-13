@@ -127,7 +127,7 @@ API_Meta.AttackMaster={offset:Number.MAX_SAFE_INTEGER,lineCount:-1};
  *                     Added magic resistance to saving throw processing. Added managing mods to moves.
  *                     Fix to One Hander fighting style.
  * v5.3.1  12/05/2026  Correted behaviour of mods when a token is deleted to be same as RoundMaster
- *                     effects & statuses.
+ *                     effects & statuses. Fixed doSetMods() to cater for deleting mob tokens with running mods.
  */
  
 var attackMaster = (function() {	// eslint-disable-line no-unused-vars
@@ -7685,7 +7685,7 @@ var attackMaster = (function() {	// eslint-disable-line no-unused-vars
 	 * of rounds or HP damage taken).
 	 */
 	 
-	async function doCheckMods( args, senderId, selected, silent=false, forceMod=false ) {
+	async function doCheckMods( args, senderId, selected, silent=false, forceMod=false ) {		// val
 
 		try {
 			if (!args) args=[];
@@ -8093,18 +8093,26 @@ var attackMaster = (function() {	// eslint-disable-line no-unused-vars
 
 	const doSetMod = function( args, selected, senderId, silent=true ) {
 		
-		let selToken;
+		let selToken,
+			delToken = '';
 		if (!args) args = [];
 		if (!args[0] && selected && selected.length) {
 			args[0] = selToken = selected[0]._id;
 		} else if (!args[0]) {
 			sendError('No token selected');
 			return;
-		} else if (!getObj('character',args[0]) && selected && selected.length) {
-			selToken = selected[0]._id;
 		} else {
-			selToken = args[0];
-		}
+			let ids = args[0].split(',');
+			if (ids.length > 1) {
+				selToken = ids[0];
+				delToken = ids[1];
+				args[0] = delToken;
+			} else if (!getObj('character',args[0]) && selected && selected.length) {
+				selToken = selected[0]._id;
+			} else {
+				selToken = args[0];
+			}
+		};
 		
 		let tokenID = args[0],
 			cmd = (args[1] || '').toLowerCase(),
@@ -8132,13 +8140,13 @@ var attackMaster = (function() {	// eslint-disable-line no-unused-vars
 			return;
 		}
 		if (!curToken) {
-			tokenID = '';
+			tokenID = delToken;
 		} else {
 			linkedToken = (fieldIndex >= 0 && curToken.get('bar'+(fieldIndex+1)+'_link').length);
 		};
 		
 		let Mods = getTable( charCS, fieldGroups.MODS ),
-			tokenRows = Mods.tableFindAll( fields.Mods_tokenID, [tokenID,charCS.id,''] ),
+			tokenRows = Mods.tableFindAll( fields.Mods_tokenID, [(tokenID || charCS.id),''] ),
 			type = /(?:sv[a-z0-9]{3}[;:]|save)/i.test(spec) ? 'save' : 
 				   /(?:mr[a-z0-9]{3}[;:])/i.test(spec) ? 'resist' : 
 					(spec.includes('thac0') ? 'thac0' : 
@@ -8208,7 +8216,7 @@ var attackMaster = (function() {	// eslint-disable-line no-unused-vars
 					hpMaxVal = (parseInt(specVals.hpmax) || 0),
 					hpChange = (parseInt(specVals.hpadj) || 0) + (parseInt(specVals.hptemp) || 0) + (parseInt(specVals.hpperm) || 0) + hpMaxVal;
 					
-				if (hpChange) {
+				if (hpChange && curToken) {
 					if (!linkedToken && hpField && hpField.name && hpField.barName.startsWith('bar')) {
 						if (specVals.hpmax) {
 							curToken.set(hpMaxField.barName+'_max',(hpMaxField.val + hpMaxVal));
@@ -8272,11 +8280,12 @@ var attackMaster = (function() {	// eslint-disable-line no-unused-vars
 				
 			};
 		}
-		const playerConfig = getSetPlayerConfig( senderId );
-		if (updated || mrUpdate || thac0Update || dmgUpdate || advUpdate || hpUpdate || moveUpdate) doCheckMods( [selToken,((silent || ['save','resist','ac'].includes(modType))?'quiet':'')], senderId, [] );
-		if ((updated || saveUpdate) && (!playerConfig || !playerConfig.manualCheckSaves)) setTimeout( () => handleCheckSaves( [selToken,'',((silent || modType !== 'save') ? 'nomenu' : '')], senderId, selected, (silent || modType !== 'save') ), 250);
-		if (updated || acUpdate) setTimeout( () => doCheckAC( [selToken,((silent || modType !== 'ac')?'quiet':'')], senderId, [] ), 500);
-
+		if (!delToken) {
+			const playerConfig = getSetPlayerConfig( senderId );
+			if (updated || mrUpdate || thac0Update || dmgUpdate || advUpdate || hpUpdate || moveUpdate) doCheckMods( [selToken,((silent || ['save','resist','ac'].includes(modType))?'quiet':'')], senderId, [] );
+			if ((updated || saveUpdate) && (!playerConfig || !playerConfig.manualCheckSaves)) setTimeout( () => handleCheckSaves( [selToken,'',((silent || modType !== 'save') ? 'nomenu' : '')], senderId, selected, (silent || modType !== 'save') ), 250);
+			if (updated || acUpdate) setTimeout( () => doCheckAC( [selToken,((silent || modType !== 'ac')?'quiet':'')], senderId, [] ), 500);
+		};
 		return;
 	};
 	
